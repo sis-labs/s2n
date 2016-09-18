@@ -189,11 +189,15 @@ int s2n_record_parse(struct s2n_connection *conn)
         eq_check(en.size % iv.size, 0);
 
         /* Copy the last encrypted block to be the next IV */
-        memcpy_check(ivpad, en.data + en.size - iv.size, iv.size);
+        if (conn->actual_protocol_version < S2N_TLS11) {
+            memcpy_check(ivpad, en.data + en.size - iv.size, iv.size);
+        }
 
         GUARD(cipher_suite->cipher->io.cbc.decrypt(session_key, &iv, &en, &en));
 
-        memcpy_check(implicit_iv, ivpad, iv.size);
+        if (conn->actual_protocol_version < S2N_TLS11) {
+            memcpy_check(implicit_iv, ivpad, iv.size);
+        }
         break;
     case S2N_AEAD:
         /* Skip explicit IV for decryption */
@@ -237,7 +241,6 @@ int s2n_record_parse(struct s2n_connection *conn)
         if (s2n_verify_cbc(conn, mac, &en) < 0) {
             GUARD(s2n_stuffer_wipe(&conn->in));
             S2N_ERROR(S2N_ERR_BAD_MESSAGE);
-            return -1;
         }
     } else {
         /* MAC check for streaming ciphers - no padding */
@@ -250,7 +253,6 @@ int s2n_record_parse(struct s2n_connection *conn)
         if (s2n_hmac_digest_verify(en.data + payload_length, check_digest, mac_digest_size) < 0) {
             GUARD(s2n_stuffer_wipe(&conn->in));
             S2N_ERROR(S2N_ERR_BAD_MESSAGE);
-            return -1;
         }
     }
 

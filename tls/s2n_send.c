@@ -42,7 +42,7 @@ int s2n_flush(struct s2n_connection *conn, s2n_blocked_status * blocked)
     while (s2n_stuffer_data_available(&conn->out)) {
         w = s2n_stuffer_send_to_fd(&conn->out, conn->writefd, s2n_stuffer_data_available(&conn->out));
         if (w < 0) {
-            if (errno == EWOULDBLOCK) {
+            if (errno == EWOULDBLOCK || errno == EAGAIN) {
                 S2N_ERROR(S2N_ERR_BLOCKED);
             }
             S2N_ERROR(S2N_ERR_IO);
@@ -114,6 +114,11 @@ ssize_t s2n_send(struct s2n_connection * conn, void *buf, ssize_t size, s2n_bloc
     struct s2n_crypto_parameters *writer = conn->server;
     if (conn->mode == S2N_CLIENT) {
         writer = conn->client;
+    }
+
+    /* Defensive check against an invalid retry */
+    if (conn->current_user_data_consumed > size) {
+        S2N_ERROR(S2N_ERR_SEND_SIZE);
     }
 
     /* Now write the data we were asked to send this round */
